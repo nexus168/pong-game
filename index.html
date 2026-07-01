@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Private Journal</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --card: rgba(10, 20, 35, 0.92);
+      --accent: #7c93ff;
+      --accent-2: #31d0aa;
+      --text: #f4f7fb;
+      --muted: #94a4bf;
+      --border: rgba(255,255,255,0.12);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, var(--bg), #13233d 60%, #1f3152);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(960px, 100%);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+      overflow: hidden;
+    }
+
+    .hero {
+      padding: 28px 28px 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(90deg, rgba(124,147,255,0.18), rgba(49,208,170,0.16));
+    }
+
+    .hero h1 { margin: 0 0 8px; font-size: clamp(1.6rem, 3vw, 2.3rem); }
+    .hero p { margin: 0; color: var(--muted); line-height: 1.6; }
+
+    .content { display: grid; gap: 24px; padding: 24px 28px 28px; }
+
+    .card { border: 1px solid var(--border); border-radius: 18px; padding: 18px; background: rgba(255,255,255,0.03); }
+
+    .config-view, .auth-view, .journal-view { display: none; }
+    .visible { display: block; }
+
+    .config-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .config-grid .full { grid-column: 1 / -1; }
+
+    form { display: grid; gap: 12px; }
+    input, textarea, button {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 12px 14px;
+      font: inherit;
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+    }
+
+    textarea { min-height: 124px; resize: vertical; }
+    button {
+      cursor: pointer;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color: white;
+      font-weight: 700;
+      border: none;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+    button:hover { transform: translateY(-1px); opacity: 0.95; }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .muted { color: var(--muted); }
+    .message { min-height: 22px; margin-top: 8px; color: #cfe8ff; }
+    .entry-list { display: grid; gap: 12px; margin-top: 14px; }
+    .entry { border: 1px solid var(--border); border-radius: 14px; padding: 14px; background: rgba(255,255,255,0.04); }
+    .entry h3 { margin: 0 0 6px; font-size: 1.02rem; }
+    .entry p { margin: 0 0 8px; white-space: pre-wrap; line-height: 1.6; color: #e9f0ff; }
+    .entry time { color: var(--muted); font-size: 0.9rem; }
+
+    @media (max-width: 700px) {
+      body { padding: 12px; }
+      .hero, .content { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>Private Journal</h1>
+      <p>Store your thoughts securely with Firebase Authentication and Firestore. Only you can see your entries.</p>
+    </section>
+
+    <section class="content">
+      <section id="configView" class="config-view visible card">
+        <h2>Connect Firebase</h2>
+        <p class="muted">Paste your Firebase project settings from Project Settings &gt; General &gt; Your apps. The values are saved locally in this browser.</p>
+        <form id="configForm">
+          <div class="config-grid">
+            <input id="apiKey" type="text" placeholder="apiKey" class="full" required />
+            <input id="authDomain" type="text" placeholder="authDomain" class="full" required />
+            <input id="projectId" type="text" placeholder="projectId" class="full" required />
+            <input id="storageBucket" type="text" placeholder="storageBucket" class="full" required />
+            <input id="messagingSenderId" type="text" placeholder="messagingSenderId" class="full" required />
+            <input id="appId" type="text" placeholder="appId" class="full" required />
+          </div>
+          <button type="submit" style="margin-top: 8px;">Save Firebase config</button>
+        </form>
+        <div id="configMessage" class="message"></div>
+      </section>
+
+      <section id="authView" class="auth-view card">
+        <h2 id="authTitle">Create your account</h2>
+        <p class="muted">Sign up or sign in to begin writing privately.</p>
+        <form id="authForm">
+          <input id="email" type="email" placeholder="Email" required />
+          <input id="password" type="password" placeholder="Password" minlength="6" required />
+          <button type="submit" id="authSubmit">Create account</button>
+        </form>
+        <div class="row" style="margin-top: 12px;">
+          <button type="button" id="toggleMode" class="secondary">Already have an account? Sign in</button>
+        </div>
+        <div id="authMessage" class="message"></div>
+      </section>
+
+      <section id="journalView" class="journal-view card">
+        <div class="row" style="justify-content: space-between; align-items: center;">
+          <div>
+            <h2 style="margin: 0 0 6px;">Your private entries</h2>
+            <p id="welcomeText" class="muted" style="margin: 0;">Signed in as your@email.com</p>
+          </div>
+          <button id="signOutBtn" class="secondary" type="button">Sign out</button>
+        </div>
+
+        <form id="entryForm" style="margin-top: 16px;">
+          <input id="entryTitle" type="text" placeholder="Entry title" required />
+          <textarea id="entryContent" placeholder="What happened today?" required></textarea>
+          <button type="submit">Save entry</button>
+        </form>
+
+        <div id="journalMessage" class="message"></div>
+        <div id="entryList" class="entry-list"></div>
+      </section>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js';
+    import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js';
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
+    import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js';
+
+    const CONFIG_STORAGE_KEY = 'private-journal-firebase-config';
+    const defaultFirebaseConfig = {
+      apiKey: 'AIzaSyCVzVpYRqp7p4BAK6YtCSFaOjGD9YO2p84',
+      authDomain: 'private-journal-77e2a.firebaseapp.com',
+      projectId: 'private-journal-77e2a',
+      storageBucket: 'private-journal-77e2a.firebasestorage.app',
+      messagingSenderId: '684281896922',
+      appId: '1:684281896922:web:439b27294c09149500eae3',
+      measurementId: 'G-16BKM3F7JF'
+    };
+
+    let app = null;
+    let auth = null;
+    let db = null;
+    let isSignUp = true;
+    let unsubscribeEntries = null;
+    let authStateListenerRegistered = false;
+    let view = 'config';
+    let pendingEntries = [];
+
+    const configView = document.getElementById('configView');
+    const authView = document.getElementById('authView');
+    const journalView = document.getElementById('journalView');
+    const configForm = document.getElementById('configForm');
+    const authForm = document.getElementById('authForm');
+    const entryForm = document.getElementById('entryForm');
+    const authTitle = document.getElementById('authTitle');
+    const authSubmit = document.getElementById('authSubmit');
+    const toggleModeBtn = document.getElementById('toggleMode');
+    const signOutBtn = document.getElementById('signOutBtn');
+    const configMessage = document.getElementById('configMessage');
+    const authMessage = document.getElementById('authMessage');
+    const journalMessage = document.getElementById('journalMessage');
+    const welcomeText = document.getElementById('welcomeText');
+    const entryList = document.getElementById('entryList');
+    const apiKeyInput = document.getElementById('apiKey');
+    const authDomainInput = document.getElementById('authDomain');
+    const projectIdInput = document.getElementById('projectId');
+    const storageBucketInput = document.getElementById('storageBucket');
+    const messagingSenderIdInput = document.getElementById('messagingSenderId');
+    const appIdInput = document.getElementById('appId');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const entryTitleInput = document.getElementById('entryTitle');
+    const entryContentInput = document.getElementById('entryContent');
+
+    function setAuthMode() {
+      isSignUp = !isSignUp;
+      authTitle.textContent = isSignUp ? 'Create your account' : 'Welcome back';
+      authSubmit.textContent = isSignUp ? 'Create account' : 'Sign in';
+      toggleModeBtn.textContent = isSignUp ? 'Already have an account? Sign in' : 'Need an account? Create one';
+    }
+
+    function setView(nextView) {
+      view = nextView;
+      configView.classList.toggle('visible', view === 'config');
+      authView.classList.toggle('visible', view === 'auth');
+      journalView.classList.toggle('visible', view === 'journal');
+    }
+
+    function setMessage(element, text, isError = false) {
+      element.textContent = text;
+      element.style.color = isError ? '#ffb7b7' : '#cfe8ff';
+    }
+
+    function getAuthErrorMessage(error) {
+      switch (error?.code) {
+        case 'auth/operation-not-allowed':
+          return 'Email/password sign-in is not enabled yet. Open Firebase Console > Authentication > Sign-in method and enable Email/Password.';
+        case 'auth/invalid-email':
+          return 'Please enter a valid email address.';
+        case 'auth/weak-password':
+          return 'Choose a stronger password with at least 6 characters.';
+        case 'auth/email-already-in-use':
+          return 'That email is already registered. Try signing in instead.';
+        case 'auth/user-not-found':
+          return 'No account was found for that email. Create an account first.';
+        case 'auth/wrong-password':
+          return 'The password is incorrect. Please try again.';
+        case 'auth/network-request-failed':
+          return 'Network error. Check your connection and try again.';
+        default:
+          return error?.message || 'Unable to sign in right now.';
+      }
+    }
+
+    function fillConfigForm(config) {
+      apiKeyInput.value = config.apiKey || '';
+      authDomainInput.value = config.authDomain || '';
+      projectIdInput.value = config.projectId || '';
+      storageBucketInput.value = config.storageBucket || '';
+      messagingSenderIdInput.value = config.messagingSenderId || '';
+      appIdInput.value = config.appId || '';
+    }
+
+    function getStoredConfig() {
+      const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+
+    function saveConfig(config) {
+      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+    }
+
+    function formatDate(timestamp) {
+      if (!timestamp) return 'Just now';
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleString();
+    }
+
+    function getPendingEntriesKey(userId) {
+      return `private-journal-pending-${userId}`;
+    }
+
+    function loadPendingEntries(userId) {
+      const raw = localStorage.getItem(getPendingEntriesKey(userId));
+      if (!raw) return [];
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return [];
+      }
+    }
+
+    function savePendingEntries(userId, entries) {
+      localStorage.setItem(getPendingEntriesKey(userId), JSON.stringify(entries));
+    }
+
+    function mergeEntries(remoteEntries, localEntries) {
+      const combined = [...localEntries, ...remoteEntries];
+      return combined.sort((a, b) => {
+        const aTime = a.createdAt?.seconds ? a.createdAt.seconds : new Date(a.createdAt).getTime() / 1000;
+        const bTime = b.createdAt?.seconds ? b.createdAt.seconds : new Date(b.createdAt).getTime() / 1000;
+        return bTime - aTime;
+      });
+    }
+
+    function renderEntries(entries) {
+      if (!entries.length) {
+        entryList.innerHTML = '<div class="entry"><p>No journal entries yet. Start writing.</p></div>';
+        return;
+      }
+
+      entryList.innerHTML = entries.map(entry => `
+        <article class="entry">
+          <h3>${entry.title || 'Untitled entry'}</h3>
+          <p>${entry.content || ''}</p>
+          <time>${formatDate(entry.createdAt)}</time>
+        </article>
+      `).join('');
+    }
+
+    function listenToEntries(user) {
+      if (unsubscribeEntries) unsubscribeEntries();
+      pendingEntries = loadPendingEntries(user.uid);
+      const q = query(collection(db, 'entries'), where('userId', '==', user.uid));
+      unsubscribeEntries = onSnapshot(q, (snapshot) => {
+        const entries = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        renderEntries(mergeEntries(entries, pendingEntries));
+      }, (error) => {
+        setMessage(journalMessage, 'Unable to load entries right now.', true);
+        console.error(error);
+      });
+    }
+
+    async function syncPendingEntries(user) {
+      if (!db || !user) return;
+      const entries = loadPendingEntries(user.uid);
+      if (!entries.length) return;
+
+      for (const entry of entries) {
+        try {
+          await addDoc(collection(db, 'entries'), {
+            userId: user.uid,
+            title: entry.title,
+            content: entry.content,
+            createdAt: serverTimestamp()
+          });
+        } catch (error) {
+          console.error(error);
+          return;
+        }
+      }
+
+      savePendingEntries(user.uid, []);
+      pendingEntries = [];
+      setMessage(journalMessage, 'Pending entries were synced to Firebase.');
+    }
+
+    function registerAuthListener() {
+      if (authStateListenerRegistered) return;
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          welcomeText.textContent = `Signed in as ${user.email}`;
+          setView('journal');
+          listenToEntries(user);
+          syncPendingEntries(user);
+        } else {
+          setView('auth');
+          authForm.reset();
+          entryForm.reset();
+          if (unsubscribeEntries) unsubscribeEntries();
+          entryList.innerHTML = '';
+          setMessage(journalMessage, '');
+        }
+      });
+      authStateListenerRegistered = true;
+    }
+
+    function initializeFirebase(config) {
+      const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+      const missing = requiredFields.filter((field) => !config[field] || String(config[field]).includes('YOUR_'));
+
+      if (missing.length) {
+        setMessage(configMessage, 'Please paste the full Firebase config values from your project settings.', true);
+        setView('config');
+        return;
+      }
+
+      try {
+        app = initializeApp(config);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        getAnalytics(app);
+        saveConfig(config);
+        registerAuthListener();
+        setMessage(configMessage, 'Firebase connected. You can sign in now.');
+        setView('auth');
+      } catch (error) {
+        setMessage(configMessage, `Could not initialize Firebase: ${error.message}`, true);
+        setView('config');
+      }
+    }
+
+    configForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const config = {
+        apiKey: apiKeyInput.value.trim(),
+        authDomain: authDomainInput.value.trim(),
+        projectId: projectIdInput.value.trim(),
+        storageBucket: storageBucketInput.value.trim(),
+        messagingSenderId: messagingSenderIdInput.value.trim(),
+        appId: appIdInput.value.trim()
+      };
+      setMessage(configMessage, 'Connecting to Firebase...');
+      initializeFirebase(config);
+    });
+
+    authForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      setMessage(authMessage, 'Please wait...');
+
+      try {
+        if (isSignUp) {
+          await createUserWithEmailAndPassword(auth, email, password);
+        } else {
+          await signInWithEmailAndPassword(auth, email, password);
+        }
+      } catch (error) {
+        setMessage(authMessage, getAuthErrorMessage(error), true);
+      }
+    });
+
+    entryForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const title = entryTitleInput.value.trim();
+      const content = entryContentInput.value.trim();
+
+      try {
+        await addDoc(collection(db, 'entries'), {
+          userId: user.uid,
+          title,
+          content,
+          createdAt: serverTimestamp()
+        });
+        entryForm.reset();
+        setMessage(journalMessage, 'Entry saved securely.');
+      } catch (error) {
+        const pendingEntry = {
+          title,
+          content,
+          createdAt: new Date().toISOString()
+        };
+        const existing = loadPendingEntries(user.uid);
+        existing.unshift(pendingEntry);
+        savePendingEntries(user.uid, existing);
+        pendingEntries = existing;
+        renderEntries(mergeEntries([], pendingEntries));
+        setMessage(journalMessage, 'Saved locally for now because Firebase is not accepting writes yet. Your entry will sync once Firestore rules are enabled.', true);
+        console.error(error);
+      }
+    });
+
+    toggleModeBtn.addEventListener('click', () => {
+      setAuthMode();
+      setMessage(authMessage, '');
+    });
+
+    signOutBtn.addEventListener('click', async () => {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.error(error);
+      }
+    });
+
+    const storedConfig = getStoredConfig();
+    const initialConfig = storedConfig || defaultFirebaseConfig;
+    fillConfigForm(initialConfig);
+    initializeFirebase(initialConfig);
+  </script>
+</body>
+</html>
