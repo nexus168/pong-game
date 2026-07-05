@@ -49,6 +49,23 @@
     display: block;
   }
 
+  #nav {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 100;
+  }
+
+  #nav a {
+    color: #0ff;
+    text-decoration: none;
+    font-size: 14px;
+  }
+
+  #nav a:hover {
+    text-decoration: underline;
+  }
+
   #overlay {
     position: fixed;
     inset: 0;
@@ -383,6 +400,10 @@ startBtn.addEventListener('click', () => {
 draw();
 loop();
 </script>
+
+<div id="nav">
+  <a href="index.html">← Back to Home</a>
+</div>
 
 </body>
 </html>

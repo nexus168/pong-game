@@ -41,6 +41,23 @@
             color: #aaa;
             text-align: center;
         }
+
+        #nav {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 100;
+        }
+
+        #nav a {
+            color: #0ff;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        #nav a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -51,6 +68,10 @@
     </div>
     <div class="controls">
         <p>Use <b>W / S</b> or <b>Up / Down Arrows</b> to move.</p>
+    </div>
+
+    <div id="nav">
+        <a href="index.html">← Back to Home</a>
     </div>
 
     <script>
