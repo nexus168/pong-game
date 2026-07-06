@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Touch-Friendly Pong</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    touch-action:none;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#111;
+    font-family:Arial,Helvetica,sans-serif;
+    color:white;
+}
+
+body{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+#container{
+    position:relative;
+    width:100%;
+    max-width:1000px;
+    aspect-ratio:16/9;
+}
+
+canvas{
+    width:100%;
+    height:100%;
+    display:block;
+    background:#000;
+    border:4px solid white;
+}
+
+#hud{
+    position:absolute;
+    top:10px;
+    left:50%;
+    transform:translateX(-50%);
+    text-align:center;
+    color:white;
+    user-select:none;
+    pointer-events:none;
+    text-shadow:0 0 6px black;
+}
+
+#hud h1{
+    font-size:clamp(18px,3vw,30px);
+}
+
+#hud p{
+    font-size:clamp(12px,2vw,18px);
+}
+</style>
+</head>
+<body>
+
+<div id="container">
+
+<div id="hud">
+<h1><span id="p1">0</span> : <span id="p2">0</span></h1>
+<p>Touch/Drag • Mouse • W/S Keys</p>
+</div>
+
+<canvas id="game"></canvas>
+
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+function resize(){
+    canvas.width=canvas.clientWidth;
+    canvas.height=canvas.clientHeight;
+}
+window.addEventListener("resize",resize);
+resize();
+
+const scorePlayer=document.getElementById("p1");
+const scoreCPU=document.getElementById("p2");
+
+let playerScore=0;
+let cpuScore=0;
+
+const paddle={
+    w:14,
+    h:110
+};
+
+const player={
+    x:20,
+    y:100,
+    speed:9
+};
+
+const cpu={
+    x:0,
+    y:100,
+    speed:5
+};
+
+const ball={
+    x:0,
+    y:0,
+    r:9,
+    dx:6,
+    dy:4,
+    speed:6
+};
+
+function resetBall(dir){
+    ball.x=canvas.width/2;
+    ball.y=canvas.height/2;
+
+    ball.speed=6;
+
+    let angle=(Math.random()*0.8-0.4);
+
+    ball.dx=Math.cos(angle)*ball.speed*dir;
+    ball.dy=Math.sin(angle)*ball.speed;
+}
+
+function resetPositions(){
+    player.y=canvas.height/2-paddle.h/2;
+    cpu.y=player.y;
+    cpu.x=canvas.width-20-paddle.w;
+    resetBall(Math.random()>0.5?1:-1);
+}
+
+resetPositions();
+
+const keys={};
+
+addEventListener("keydown",e=>{
+    keys[e.key.toLowerCase()]=true;
+});
+
+addEventListener("keyup",e=>{
+    keys[e.key.toLowerCase()]=false;
+});
+
+function movePlayerKeyboard(){
+    if(keys["w"]) player.y-=player.speed;
+    if(keys["s"]) player.y+=player.speed;
+}
+
+function pointerMove(clientY){
+    const rect=canvas.getBoundingClientRect();
+    const y=((clientY-rect.top)/rect.height)*canvas.height;
+    player.y=y-paddle.h/2;
+}
+
+canvas.addEventListener("pointerdown",e=>{
+    pointerMove(e.clientY);
+});
+
+canvas.addEventListener("pointermove",e=>{
+    if(e.buttons||e.pointerType==="touch"){
+        pointerMove(e.clientY);
+    }
+});
+
+canvas.addEventListener("touchmove",e=>{
+    pointerMove(e.touches[0].clientY);
+    e.preventDefault();
+},{passive:false});
+
+function clampPaddles(){
+    player.y=Math.max(0,Math.min(canvas.height-paddle.h,player.y));
+    cpu.y=Math.max(0,Math.min(canvas.height-paddle.h,cpu.y));
+}
+
+function updateCPU(){
+    let target=ball.y-paddle.h/2;
+
+    if(cpu.y<target) cpu.y+=cpu.speed;
+    else cpu.y-=cpu.speed;
+}
+
+function collide(px,py){
+    return (
+        ball.x-ball.r<px+paddle.w &&
+        ball.x+ball.r>px &&
+        ball.y-ball.r<py+paddle.h &&
+        ball.y+ball.r>py
+    );
+}
+
+function updateBall(){
+
+    ball.x+=ball.dx;
+    ball.y+=ball.dy;
+
+    if(ball.y-ball.r<0){
+        ball.y=ball.r;
+        ball.dy*=-1;
+    }
+
+    if(ball.y+ball.r>canvas.height){
+        ball.y=canvas.height-ball.r;
+        ball.dy*=-1;
+    }
+
+    if(collide(player.x,player.y)&&ball.dx<0){
+
+        let hit=(ball.y-(player.y+paddle.h/2))/(paddle.h/2);
+        let angle=hit*Math.PI/4;
+
+        ball.speed+=0.2;
+
+        ball.dx=Math.cos(angle)*ball.speed;
+        ball.dy=Math.sin(angle)*ball.speed;
+    }
+
+    if(collide(cpu.x,cpu.y)&&ball.dx>0){
+
+        let hit=(ball.y-(cpu.y+paddle.h/2))/(paddle.h/2);
+        let angle=hit*Math.PI/4;
+
+        ball.speed+=0.2;
+
+        ball.dx=-Math.cos(angle)*ball.speed;
+        ball.dy=Math.sin(angle)*ball.speed;
+    }
+
+    if(ball.x<0){
+        cpuScore++;
+        scoreCPU.textContent=cpuScore;
+        resetBall(1);
+    }
+
+    if(ball.x>canvas.width){
+        playerScore++;
+        scorePlayer.textContent=playerScore;
+        resetBall(-1);
+    }
+}
+
+function drawNet(){
+    ctx.strokeStyle="#666";
+    ctx.setLineDash([12,12]);
+    ctx.beginPath();
+    ctx.moveTo(canvas.width/2,0);
+    ctx.lineTo(canvas.width/2,canvas.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function draw(){
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    drawNet();
+
+    ctx.fillStyle="white";
+
+    ctx.fillRect(player.x,player.y,paddle.w,paddle.h);
+    ctx.fillRect(cpu.x,cpu.y,paddle.w,paddle.h);
+
+    ctx.beginPath();
+    ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);
+    ctx.fill();
+}
+
+function loop(){
+
+    movePlayerKeyboard();
+
+    updateCPU();
+
+    clampPaddles();
+
+    updateBall();
+
+    draw();
+
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
